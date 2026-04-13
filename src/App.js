@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import TransactionForm from './components/TransactionForm';
 import Auth from './components/Auth';
+import FixedExpenses from './components/FixedExpenses';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -26,6 +27,7 @@ export default function App() {
   const [year, setYear]               = useState(today.getFullYear());
   const [month, setMonth]             = useState(today.getMonth());
   const [allTx, setAllTx]             = useState({});
+  const [fixedExpenses, setFixedExpenses] = useState([]);
   const [showForm, setShowForm]       = useState(false);
   const [filter, setFilter]           = useState('todo');
   const [view, setView]               = useState('mes');
@@ -42,11 +44,14 @@ export default function App() {
 
   // Cargar datos de Firestore cuando el usuario entra
   useEffect(() => {
-    if (!user) { setAllTx({}); return; }
+    if (!user) { setAllTx({}); setFixedExpenses([]); return; }
     const load = async () => {
       const ref = doc(db, 'users', user.uid);
       const snap = await getDoc(ref);
-      if (snap.exists()) setAllTx(snap.data().transactions || {});
+      if (snap.exists()) {
+        setAllTx(snap.data().transactions || {});
+        setFixedExpenses(snap.data().fixedExpenses || []);
+      }
     };
     load();
   }, [user]);
@@ -57,13 +62,16 @@ export default function App() {
     const save = async () => {
       setSaving(true);
       try {
-        await setDoc(doc(db, 'users', user.uid), { transactions: allTx });
+        await setDoc(doc(db, 'users', user.uid), {
+          transactions: allTx,
+          fixedExpenses: fixedExpenses,
+        });
       } catch(e) { console.error(e); }
       setSaving(false);
     };
     const timeout = setTimeout(save, 800);
     return () => clearTimeout(timeout);
-  }, [allTx, user, authLoading]);
+  }, [allTx, fixedExpenses, user, authLoading]);
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   const txs = allTx[monthKey] || [];
@@ -101,6 +109,31 @@ export default function App() {
     if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
       setAllTx(prev => ({ ...prev, [monthKey]: [] }));
     }
+  };
+
+  const saveFixedExpenses = (list) => {
+    setFixedExpenses(list);
+  };
+
+  const deleteFixedExpense = (id) => {
+    setFixedExpenses(prev => prev.filter(e => e.id !== id));
+  };
+
+  const applyFixedToMonth = (list, key) => {
+    const [y, m] = key.split('-');
+    const newTxs = list.map(e => ({
+      id: Date.now() + Math.random(),
+      type: 'egreso',
+      category: 'Gasto Fijo',
+      description: e.description,
+      amount: Number(e.amount),
+      date: `${y}-${m}-${String(e.day).padStart(2, '0')}`,
+    }));
+    setAllTx(prev => ({
+      ...prev,
+      [key]: [...newTxs, ...(prev[key] || [])]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+    }));
   };
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1);
@@ -157,6 +190,7 @@ export default function App() {
 
       <div className="view-toggle">
         <button className={`view-btn ${view === 'mes' ? 'view-active' : ''}`} onClick={() => setView('mes')}>📅 Mes actual</button>
+        <button className={`view-btn ${view === 'fijos' ? 'view-active' : ''}`} onClick={() => setView('fijos')}>🗓 Gastos Fijos</button>
         <button className={`view-btn ${view === 'historial' ? 'view-active' : ''}`} onClick={() => setView('historial')}>📊 Historial</button>
       </div>
 
@@ -233,6 +267,16 @@ export default function App() {
             )}
           </div>
         </>
+      )}
+
+      {view === 'fijos' && (
+        <FixedExpenses
+          fixedExpenses={fixedExpenses}
+          onSave={saveFixedExpenses}
+          onDelete={deleteFixedExpense}
+          onApply={applyFixedToMonth}
+          currentMonthKey={monthKey}
+        />
       )}
 
       {view === 'historial' && (
