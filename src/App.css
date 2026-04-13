@@ -40,16 +40,6 @@
   text-transform: uppercase;
 }
 
-.header-balance {
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-top: 2px;
-}
-
-.header-balance.pos { color: var(--green); }
-.header-balance.neg { color: var(--red); }
-
 /* MONTH NAV */
 .month-nav {
   display: flex;
@@ -526,4 +516,127 @@
   .ht-totals { grid-template-columns: 1fr; }
   .ht-month-card { flex-wrap: wrap; }
   .ht-bars { min-width: 100%; }
+}
+/* AHORRO TOTAL */
+.savings-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  cursor: pointer;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.savings-row:hover .savings-value {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+}
+
+.savings-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.savings-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0a2463;
+  letter-spacing: -0.02em;
+}
+
+.savings-edit-icon {
+  font-size: 0.7rem;
+  opacity: 0.4;
+}
+
+.savings-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  justify-content: flex-end;
+}
+
+.savings-input {
+  width: 130px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 2px solid #0a2463;
+  background: var(--bg-input);
+  color: #0a2463;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  text-align: right;
+}
+/* AHORRO TOTAL (número grande navy) */
+.savings-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.savings-row:hover .savings-value {
+  opacity: 0.8;
+}
+
+.savings-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0a2463;
+  letter-spacing: -0.03em;
+}
+
+.savings-edit-icon {
+  font-size: 0.75rem;
+  opacity: 0.35;
+  margin-top: 4px;
+}
+
+.savings-edit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.savings-input {
+  width: 150px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 2px solid #0a2463;
+  background: var(--bg-input);
+  color: #0a2463;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  text-align: right;
+}
+
+/* BALANCE DEL MES (número mediano verde/rojo) */
+.header-balance-month {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+  text-align: right;
+}
+
+.header-balance-month.pos { color: var(--green); }
+.header-balance-month.neg { color: var(--red); }
+
+.balance-month-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }

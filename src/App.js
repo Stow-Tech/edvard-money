@@ -28,12 +28,14 @@ export default function App() {
   const [month, setMonth]             = useState(today.getMonth());
   const [allTx, setAllTx]             = useState({});
   const [fixedExpenses, setFixedExpenses] = useState([]);
+  const [savings, setSavings]         = useState(null);
+  const [editingSavings, setEditingSavings] = useState(false);
+  const [savingsInput, setSavingsInput] = useState('');
   const [showForm, setShowForm]       = useState(false);
   const [filter, setFilter]           = useState('todo');
   const [view, setView]               = useState('mes');
   const [saving, setSaving]           = useState(false);
 
-  // Detectar si el usuario está logueado
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
       setUser(u);
@@ -42,36 +44,38 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Cargar datos de Firestore cuando el usuario entra
   useEffect(() => {
-    if (!user) { setAllTx({}); setFixedExpenses([]); return; }
+    if (!user) { setAllTx({}); setFixedExpenses([]); setSavings(0); return; }
     const load = async () => {
       const ref = doc(db, 'users', user.uid);
       const snap = await getDoc(ref);
       if (snap.exists()) {
         setAllTx(snap.data().transactions || {});
         setFixedExpenses(snap.data().fixedExpenses || []);
+        setSavings(snap.data().savings ?? 0);
+      } else {
+        setSavings(0);
       }
     };
     load();
   }, [user]);
 
-  // Guardar en Firestore cada vez que cambian los datos
   useEffect(() => {
-    if (!user || authLoading) return;
+    if (!user || authLoading || savings === null) return;
     const save = async () => {
       setSaving(true);
       try {
         await setDoc(doc(db, 'users', user.uid), {
           transactions: allTx,
           fixedExpenses: fixedExpenses,
+          savings: savings,
         });
       } catch(e) { console.error(e); }
       setSaving(false);
     };
     const timeout = setTimeout(save, 800);
     return () => clearTimeout(timeout);
-  }, [allTx, fixedExpenses, user, authLoading]);
+  }, [allTx, fixedExpenses, savings, user, authLoading]);
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   const txs = allTx[monthKey] || [];
@@ -90,6 +94,8 @@ export default function App() {
   });
 
   const addTx = (tx) => {
+    const amount = Number(tx.amount);
+    setSavings(prev => tx.type === 'ingreso' ? prev + amount : prev - amount);
     setAllTx(prev => ({
       ...prev,
       [monthKey]: [{ ...tx, id: Date.now() }, ...(prev[monthKey] || [])]
@@ -99,6 +105,10 @@ export default function App() {
   };
 
   const deleteTx = (id) => {
+    const tx = txs.find(t => t.id === id);
+    if (tx) {
+      setSavings(prev => tx.type === 'ingreso' ? prev - tx.amount : prev + tx.amount);
+    }
     setAllTx(prev => ({
       ...prev,
       [monthKey]: (prev[monthKey] || []).filter(t => t.id !== id)
@@ -107,17 +117,15 @@ export default function App() {
 
   const clearAll = () => {
     if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
+      const monthIng = txs.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0);
+      const monthEg  = txs.filter(t => t.type === 'egreso').reduce((s, t) => s + t.amount, 0);
+      setSavings(prev => prev - monthIng + monthEg);
       setAllTx(prev => ({ ...prev, [monthKey]: [] }));
     }
   };
 
-  const saveFixedExpenses = (list) => {
-    setFixedExpenses(list);
-  };
-
-  const deleteFixedExpense = (id) => {
-    setFixedExpenses(prev => prev.filter(e => e.id !== id));
-  };
+  const saveFixedExpenses = (list) => setFixedExpenses(list);
+  const deleteFixedExpense = (id) => setFixedExpenses(prev => prev.filter(e => e.id !== id));
 
   const applyFixedToMonth = (list, key) => {
     const [y, m] = key.split('-');
@@ -129,11 +137,29 @@ export default function App() {
       amount: Number(e.amount),
       date: `${y}-${m}-${String(e.day).padStart(2, '0')}`,
     }));
+    const totalFixed = newTxs.reduce((s, t) => s + t.amount, 0);
+    setSavings(prev => prev - totalFixed);
     setAllTx(prev => ({
       ...prev,
       [key]: [...newTxs, ...(prev[key] || [])]
         .sort((a, b) => new Date(b.date) - new Date(a.date))
     }));
+  };
+
+  const startEditSavings = () => {
+    setSavingsInput(savings === 0 ? '' : String(savings));
+    setEditingSavings(true);
+  };
+
+  const confirmSavings = () => {
+    const val = parseFloat(String(savingsInput).replace(/,/g, ''));
+    if (!isNaN(val)) setSavings(val);
+    setEditingSavings(false);
+  };
+
+  const handleSavingsKey = (e) => {
+    if (e.key === 'Enter') confirmSavings();
+    if (e.key === 'Escape') setEditingSavings(false);
   };
 
   const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1);
@@ -158,14 +184,12 @@ export default function App() {
 
   const goToMonth = (y, m) => { setYear(y); setMonth(m); setView('mes'); setFilter('todo'); };
 
-  // Pantalla de carga
   if (authLoading) return (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg-page)'}}>
       <p style={{color:'var(--text-muted)',fontSize:'0.9rem'}}>Cargando...</p>
     </div>
   );
 
-  // Si no hay usuario, mostrar login
   if (!user) return <Auth />;
 
   return (
@@ -177,9 +201,33 @@ export default function App() {
         </div>
         <div className="header-right">
           <p className="header-date">{todayLabel()}</p>
-          <p className={`header-balance ${balance >= 0 ? 'pos' : 'neg'}`}>
-            {balance < 0 ? '-' : ''}{fmt(balance)}
+
+          {/* AHORRO TOTAL — número grande navy */}
+          {editingSavings ? (
+            <div className="savings-edit-row">
+              <input
+                className="savings-input"
+                type="number"
+                autoFocus
+                value={savingsInput}
+                onChange={e => setSavingsInput(e.target.value)}
+                onBlur={confirmSavings}
+                onKeyDown={handleSavingsKey}
+                placeholder="0"
+              />
+            </div>
+          ) : (
+            <div className="savings-row" onClick={startEditSavings} title="Clic para editar">
+              <span className="savings-value">{fmt(savings ?? 0)}</span>
+              <span className="savings-edit-icon">✏️</span>
+            </div>
+          )}
+
+          {/* BALANCE DEL MES — número mediano verde/rojo */}
+          <p className={`header-balance-month ${balance >= 0 ? 'pos' : 'neg'}`}>
+            {balance < 0 ? '-' : '+'}{fmt(balance)} <span className="balance-month-label">este mes</span>
           </p>
+
           <div className="user-row">
             <span className="user-email">{user.email}</span>
             {saving && <span className="saving-badge">guardando...</span>}
