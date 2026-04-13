@@ -1,0 +1,278 @@
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import TransactionForm from './components/TransactionForm';
+import Auth from './components/Auth';
+import { auth, db } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+
+const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+function fmt(n) {
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(Math.abs(n));
+}
+
+function todayLabel() {
+  const d = new Date();
+  return `${DAYS_ES[d.getDay()]}, ${d.getDate()} de ${MONTHS_ES[d.getMonth()].toUpperCase()} de ${d.getFullYear()}`;
+}
+
+export default function App() {
+  const today = new Date();
+  const [user, setUser]               = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [year, setYear]               = useState(today.getFullYear());
+  const [month, setMonth]             = useState(today.getMonth());
+  const [allTx, setAllTx]             = useState({});
+  const [showForm, setShowForm]       = useState(false);
+  const [filter, setFilter]           = useState('todo');
+  const [view, setView]               = useState('mes');
+  const [saving, setSaving]           = useState(false);
+
+  // Detectar si el usuario está logueado
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => {
+      setUser(u);
+      setAuthLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  // Cargar datos de Firestore cuando el usuario entra
+  useEffect(() => {
+    if (!user) { setAllTx({}); return; }
+    const load = async () => {
+      const ref = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) setAllTx(snap.data().transactions || {});
+    };
+    load();
+  }, [user]);
+
+  // Guardar en Firestore cada vez que cambian los datos
+  useEffect(() => {
+    if (!user || authLoading) return;
+    const save = async () => {
+      setSaving(true);
+      try {
+        await setDoc(doc(db, 'users', user.uid), { transactions: allTx });
+      } catch(e) { console.error(e); }
+      setSaving(false);
+    };
+    const timeout = setTimeout(save, 800);
+    return () => clearTimeout(timeout);
+  }, [allTx, user, authLoading]);
+
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const txs = allTx[monthKey] || [];
+
+  const ingresos    = txs.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0);
+  const egresos     = txs.filter(t => t.type === 'egreso').reduce((s, t) => s + t.amount, 0);
+  const gastosFijos = txs.filter(t => t.category === 'Gasto Fijo').reduce((s, t) => s + t.amount, 0);
+  const balance     = ingresos - egresos;
+
+  const filtered = txs.filter(t => {
+    if (filter === 'todo') return true;
+    if (filter === 'ingresos') return t.type === 'ingreso';
+    if (filter === 'egresos') return t.type === 'egreso' && t.category !== 'Gasto Fijo';
+    if (filter === 'fijos') return t.category === 'Gasto Fijo';
+    return true;
+  });
+
+  const addTx = (tx) => {
+    setAllTx(prev => ({
+      ...prev,
+      [monthKey]: [{ ...tx, id: Date.now() }, ...(prev[monthKey] || [])]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+    }));
+    setShowForm(false);
+  };
+
+  const deleteTx = (id) => {
+    setAllTx(prev => ({
+      ...prev,
+      [monthKey]: (prev[monthKey] || []).filter(t => t.id !== id)
+    }));
+  };
+
+  const clearAll = () => {
+    if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
+      setAllTx(prev => ({ ...prev, [monthKey]: [] }));
+    }
+  };
+
+  const prevMonth = () => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1);
+  const nextMonth = () => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1);
+
+  const defaultDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const historicalMonths = Object.keys(allTx)
+    .filter(k => (allTx[k] || []).length > 0)
+    .sort((a, b) => b.localeCompare(a))
+    .map(k => {
+      const list = allTx[k] || [];
+      const ing = list.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0);
+      const eg  = list.filter(t => t.type === 'egreso').reduce((s, t) => s + t.amount, 0);
+      const [y, m] = k.split('-');
+      return { key: k, year: parseInt(y), month: parseInt(m) - 1, ing, eg, bal: ing - eg, count: list.length };
+    });
+
+  const allTimeIng = historicalMonths.reduce((s, m) => s + m.ing, 0);
+  const allTimeEg  = historicalMonths.reduce((s, m) => s + m.eg, 0);
+  const allTimeBal = allTimeIng - allTimeEg;
+
+  const goToMonth = (y, m) => { setYear(y); setMonth(m); setView('mes'); setFilter('todo'); };
+
+  // Pantalla de carga
+  if (authLoading) return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg-page)'}}>
+      <p style={{color:'var(--text-muted)',fontSize:'0.9rem'}}>Cargando...</p>
+    </div>
+  );
+
+  // Si no hay usuario, mostrar login
+  if (!user) return <Auth />;
+
+  return (
+    <div className="page">
+      <div className="header">
+        <div>
+          <h1 className="app-name">Edvard Money</h1>
+          <p className="app-sub">Controla tu libertad financiera</p>
+        </div>
+        <div className="header-right">
+          <p className="header-date">{todayLabel()}</p>
+          <p className={`header-balance ${balance >= 0 ? 'pos' : 'neg'}`}>
+            {balance < 0 ? '-' : ''}{fmt(balance)}
+          </p>
+          <div className="user-row">
+            <span className="user-email">{user.email}</span>
+            {saving && <span className="saving-badge">guardando...</span>}
+            <button className="logout-btn" onClick={() => signOut(auth)}>Salir</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="view-toggle">
+        <button className={`view-btn ${view === 'mes' ? 'view-active' : ''}`} onClick={() => setView('mes')}>📅 Mes actual</button>
+        <button className={`view-btn ${view === 'historial' ? 'view-active' : ''}`} onClick={() => setView('historial')}>📊 Historial</button>
+      </div>
+
+      {view === 'mes' && (
+        <>
+          <div className="month-nav">
+            <button className="mnav-btn" onClick={prevMonth}>‹</button>
+            <span className="mnav-label">{MONTHS_ES[month]} {year}</span>
+            <button className="mnav-btn" onClick={nextMonth}>›</button>
+          </div>
+
+          <div className="cards">
+            <div className="card card-green">
+              <div className="card-icon-wrap green-wrap"><span className="card-icon">↑</span></div>
+              <div><p className="card-label">Total Ingresos</p><p className="card-value green">{fmt(ingresos)}</p></div>
+            </div>
+            <div className="card card-red">
+              <div className="card-icon-wrap red-wrap"><span className="card-icon">↓</span></div>
+              <div><p className="card-label">Total Egresos</p><p className="card-value red">{fmt(egresos)}</p></div>
+            </div>
+            <div className="card card-purple">
+              <div className="card-icon-wrap purple-wrap"><span style={{fontSize:'1.1rem'}}>🗓</span></div>
+              <div><p className="card-label">Gastos Fijos</p><p className="card-value purple">{fmt(gastosFijos)}</p></div>
+            </div>
+          </div>
+
+          <div className="form-card">
+            <div className="form-card-header" onClick={() => setShowForm(!showForm)}>
+              <div className="form-card-title">
+                <span className="plus-icon">＋</span>
+                <span>Nuevo Registro</span>
+              </div>
+              <span className="form-chevron">{showForm ? '▲' : '▼'}</span>
+            </div>
+            {showForm && (
+              <div className="form-card-body">
+                <TransactionForm onAdd={addTx} defaultDate={defaultDate} />
+              </div>
+            )}
+          </div>
+
+          <div className="filter-pills">
+            {['todo','fijos','ingresos','egresos'].map(f => (
+              <button key={f} className={`pill ${filter === f ? 'pill-active' : ''}`} onClick={() => setFilter(f)}>
+                {f === 'todo' ? 'Todo' : f === 'fijos' ? 'Gastos Fijos' : f === 'ingresos' ? 'Ingresos' : 'Egresos'}
+              </button>
+            ))}
+          </div>
+
+          <div className="history-card">
+            <div className="history-header">
+              <h2 className="history-title">Historial Reciente</h2>
+              {txs.length > 0 && <button className="clear-btn" onClick={clearAll}>LIMPIAR TODO</button>}
+            </div>
+            <div className="history-divider" />
+            {filtered.length === 0 ? (
+              <p className="empty-msg">Sin movimientos{filter !== 'todo' ? ' en esta categoría' : ' este mes'}.</p>
+            ) : (
+              filtered.map(tx => (
+                <div key={tx.id} className="tx-row">
+                  <div className={`tx-icon-wrap ${tx.type === 'ingreso' ? 'tx-icon-green' : tx.category === 'Gasto Fijo' ? 'tx-icon-purple' : 'tx-icon-red'}`}>
+                    <span style={{fontSize:'1rem'}}>{tx.type === 'ingreso' ? '↑' : tx.category === 'Gasto Fijo' ? '🗓' : '↓'}</span>
+                  </div>
+                  <div className="tx-info">
+                    <p className="tx-desc">{tx.description}</p>
+                    <p className="tx-date">{new Date(tx.date + 'T12:00:00').toLocaleDateString('es-MX')}</p>
+                  </div>
+                  <span className={`tx-amount ${tx.type === 'ingreso' ? 'green' : 'red'}`}>
+                    {tx.type === 'ingreso' ? '+' : '- '}{fmt(tx.amount)}
+                  </span>
+                  <button className="tx-del" onClick={() => deleteTx(tx.id)}>🗑</button>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {view === 'historial' && (
+        <>
+          {historicalMonths.length > 0 && (
+            <div className="ht-totals">
+              <div className="ht-total-card"><p className="ht-total-lbl">Ingresos totales</p><p className="ht-total-val green">{fmt(allTimeIng)}</p></div>
+              <div className="ht-total-card"><p className="ht-total-lbl">Egresos totales</p><p className="ht-total-val red">{fmt(allTimeEg)}</p></div>
+              <div className="ht-total-card"><p className="ht-total-lbl">Balance general</p><p className={`ht-total-val ${allTimeBal >= 0 ? 'green' : 'red'}`}>{allTimeBal < 0 ? '-' : ''}{fmt(allTimeBal)}</p></div>
+            </div>
+          )}
+          {historicalMonths.length === 0 ? (
+            <div className="history-card"><p className="empty-msg">Aún no hay meses registrados.</p></div>
+          ) : (
+            <div className="ht-list">
+              {historicalMonths.map(m => (
+                <div key={m.key} className="ht-month-card" onClick={() => goToMonth(m.year, m.month)}>
+                  <div className="ht-month-left">
+                    <div className="ht-month-badge">
+                      <span className="ht-month-name">{MONTHS_ES[m.month]}</span>
+                      <span className="ht-month-year">{m.year}</span>
+                    </div>
+                    <span className="ht-count">{m.count} mov.</span>
+                  </div>
+                  <div className="ht-month-stats">
+                    <div className="ht-stat"><span className="ht-stat-lbl">Ingresos</span><span className="ht-stat-val green">+{fmt(m.ing)}</span></div>
+                    <div className="ht-stat"><span className="ht-stat-lbl">Egresos</span><span className="ht-stat-val red">-{fmt(m.eg)}</span></div>
+                    <div className="ht-stat"><span className="ht-stat-lbl">Balance</span><span className={`ht-stat-val ${m.bal >= 0 ? 'green' : 'red'}`}>{m.bal < 0 ? '-' : '+'}{fmt(m.bal)}</span></div>
+                  </div>
+                  <div className="ht-bars">
+                    {m.ing > 0 && <div className="ht-bar-row"><span className="ht-bar-lbl">Ing</span><div className="ht-bar-track"><div className="ht-bar green-bar" style={{width:`${Math.min(100,(m.ing/Math.max(m.ing,m.eg))*100)}%`}}/></div></div>}
+                    {m.eg > 0 && <div className="ht-bar-row"><span className="ht-bar-lbl">Eg</span><div className="ht-bar-track"><div className="ht-bar red-bar" style={{width:`${Math.min(100,(m.eg/Math.max(m.ing,m.eg))*100)}%`}}/></div></div>}
+                  </div>
+                  <span className="ht-arrow">›</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
