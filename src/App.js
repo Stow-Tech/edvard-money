@@ -10,6 +10,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const INCOME_CATEGORIES = ['Ahorro'];
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(Math.abs(n));
@@ -22,19 +23,19 @@ function todayLabel() {
 
 export default function App() {
   const today = new Date();
-  const [user, setUser]               = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [year, setYear]               = useState(today.getFullYear());
-  const [month, setMonth]             = useState(today.getMonth());
-  const [allTx, setAllTx]             = useState({});
+  const [user, setUser]                   = useState(null);
+  const [authLoading, setAuthLoading]     = useState(true);
+  const [year, setYear]                   = useState(today.getFullYear());
+  const [month, setMonth]                 = useState(today.getMonth());
+  const [allTx, setAllTx]                 = useState({});
   const [fixedExpenses, setFixedExpenses] = useState([]);
-  const [savings, setSavings]         = useState(null);
+  const [baseBalance, setBaseBalance]     = useState(null);
   const [editingSavings, setEditingSavings] = useState(false);
-  const [savingsInput, setSavingsInput] = useState('');
-  const [showForm, setShowForm]       = useState(false);
-  const [filter, setFilter]           = useState('todo');
-  const [view, setView]               = useState('mes');
-  const [saving, setSaving]           = useState(false);
+  const [savingsInput, setSavingsInput]   = useState('');
+  const [showForm, setShowForm]           = useState(false);
+  const [filter, setFilter]               = useState('todo');
+  const [view, setView]                   = useState('mes');
+  const [saving, setSaving]               = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => {
@@ -45,37 +46,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setAllTx({}); setFixedExpenses([]); setSavings(0); return; }
+    if (!user) { setAllTx({}); setFixedExpenses([]); setBaseBalance(0); return; }
     const load = async () => {
-      const ref = doc(db, 'users', user.uid);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setAllTx(snap.data().transactions || {});
-        setFixedExpenses(snap.data().fixedExpenses || []);
-        setSavings(snap.data().savings ?? 0);
-      } else {
-        setSavings(0);
-      }
-    };
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    setAllTx(snap.data().transactions || {});
+    setFixedExpenses(snap.data().fixedExpenses || []);
+    const savedBase  = snap.data().baseBalance ?? null;
+    if (savedBase !== null) {
+      setBaseBalance(savedBase);
+    } else {
+      setBaseBalance(0);
+    }
+  } else {
+    setBaseBalance(0);
+  }
+};
     load();
   }, [user]);
 
   useEffect(() => {
-    if (!user || authLoading || savings === null) return;
+    if (!user || authLoading || baseBalance === null) return;
     const save = async () => {
       setSaving(true);
       try {
         await setDoc(doc(db, 'users', user.uid), {
           transactions: allTx,
           fixedExpenses: fixedExpenses,
-          savings: savings,
+          baseBalance: baseBalance,
         });
       } catch(e) { console.error(e); }
       setSaving(false);
     };
     const timeout = setTimeout(save, 800);
     return () => clearTimeout(timeout);
-  }, [allTx, fixedExpenses, savings, user, authLoading]);
+  }, [allTx, fixedExpenses, baseBalance, user, authLoading]);
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   const txs = allTx[monthKey] || [];
@@ -84,6 +90,12 @@ export default function App() {
   const egresos     = txs.filter(t => t.type === 'egreso').reduce((s, t) => s + t.amount, 0);
   const gastosFijos = txs.filter(t => t.category === 'Gasto Fijo').reduce((s, t) => s + t.amount, 0);
   const balance     = ingresos - egresos;
+
+  // Balance total = base manual + todo lo que hay en transacciones
+  const txTotal = Object.values(allTx).flat().reduce((s, t) =>
+    t.type === 'ingreso' ? s + t.amount : s - t.amount, 0
+  );
+  const computedSavings = (baseBalance ?? 0) + txTotal;
 
   const filtered = txs.filter(t => {
     if (filter === 'todo') return true;
@@ -94,8 +106,6 @@ export default function App() {
   });
 
   const addTx = (tx) => {
-    const amount = Number(tx.amount);
-    setSavings(prev => tx.type === 'ingreso' ? prev + amount : prev - amount);
     setAllTx(prev => ({
       ...prev,
       [monthKey]: [{ ...tx, id: Date.now() }, ...(prev[monthKey] || [])]
@@ -105,10 +115,6 @@ export default function App() {
   };
 
   const deleteTx = (id) => {
-    const tx = txs.find(t => t.id === id);
-    if (tx) {
-      setSavings(prev => tx.type === 'ingreso' ? prev - tx.amount : prev + tx.amount);
-    }
     setAllTx(prev => ({
       ...prev,
       [monthKey]: (prev[monthKey] || []).filter(t => t.id !== id)
@@ -117,28 +123,26 @@ export default function App() {
 
   const clearAll = () => {
     if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
-      const monthIng = txs.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0);
-      const monthEg  = txs.filter(t => t.type === 'egreso').reduce((s, t) => s + t.amount, 0);
-      setSavings(prev => prev - monthIng + monthEg);
       setAllTx(prev => ({ ...prev, [monthKey]: [] }));
     }
   };
 
-  const saveFixedExpenses = (list) => setFixedExpenses(list);
-  const deleteFixedExpense = (id) => setFixedExpenses(prev => prev.filter(e => e.id !== id));
+  const saveFixedExpenses  = (list) => setFixedExpenses(list);
+  const deleteFixedExpense = (id)  => setFixedExpenses(prev => prev.filter(e => e.id !== id));
 
   const applyFixedToMonth = (list, key) => {
     const [y, m] = key.split('-');
-    const newTxs = list.map(e => ({
-      id: Date.now() + Math.random(),
-      type: 'egreso',
-      category: 'Gasto Fijo',
-      description: e.description,
-      amount: Number(e.amount),
-      date: `${y}-${m}-${String(e.day).padStart(2, '0')}`,
-    }));
-    const totalFixed = newTxs.reduce((s, t) => s + t.amount, 0);
-    setSavings(prev => prev - totalFixed);
+    const newTxs = list.map(e => {
+      const isIncome = INCOME_CATEGORIES.includes(e.category);
+      return {
+        id: Date.now() + Math.random(),
+        type: isIncome ? 'ingreso' : 'egreso',
+        category: isIncome ? 'Ingreso Fijo' : 'Gasto Fijo',
+        description: e.description,
+        amount: Number(e.amount),
+        date: `${y}-${m}-${String(e.day).padStart(2, '0')}`,
+      };
+    });
     setAllTx(prev => ({
       ...prev,
       [key]: [...newTxs, ...(prev[key] || [])]
@@ -146,14 +150,18 @@ export default function App() {
     }));
   };
 
+  // Edición manual del balance navy
   const startEditSavings = () => {
-    setSavingsInput(savings === 0 ? '' : String(savings));
+    setSavingsInput(String(computedSavings));
     setEditingSavings(true);
   };
 
   const confirmSavings = () => {
     const val = parseFloat(String(savingsInput).replace(/,/g, ''));
-    if (!isNaN(val)) setSavings(val);
+    if (!isNaN(val)) {
+      // Ajusta baseBalance para que computedSavings quede igual a lo que escribió el usuario
+      setBaseBalance(val - txTotal);
+    }
     setEditingSavings(false);
   };
 
@@ -202,7 +210,7 @@ export default function App() {
         <div className="header-right">
           <p className="header-date">{todayLabel()}</p>
 
-          {/* AHORRO TOTAL — número grande navy */}
+          {/* BALANCE TOTAL — editable manualmente, siempre correcto con transacciones */}
           {editingSavings ? (
             <div className="savings-edit-row">
               <input
@@ -218,12 +226,12 @@ export default function App() {
             </div>
           ) : (
             <div className="savings-row" onClick={startEditSavings} title="Clic para editar">
-              <span className="savings-value">{fmt(savings ?? 0)}</span>
+              <span className="savings-value">{fmt(computedSavings)}</span>
               <span className="savings-edit-icon">✏️</span>
             </div>
           )}
 
-          {/* BALANCE DEL MES — número mediano verde/rojo */}
+          {/* BALANCE DEL MES */}
           <p className={`header-balance-month ${balance >= 0 ? 'pos' : 'neg'}`}>
             {balance < 0 ? '-' : '+'}{fmt(balance)} <span className="balance-month-label">este mes</span>
           </p>

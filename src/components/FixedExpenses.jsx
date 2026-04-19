@@ -12,6 +12,9 @@ const CATEGORY_EMOJI = {
   'Deuda':'📋','Ahorro':'🐷','Otro gasto fijo':'📌'
 };
 
+// Categories that ADD to balance (income-like)
+const INCOME_CATEGORIES = ['Ahorro'];
+
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
     style: 'currency', currency: 'MXN', minimumFractionDigits: 0
@@ -23,10 +26,14 @@ const emptyForm = { description: '', amount: '', category: 'Renta', day: '1' };
 export default function FixedExpenses({ fixedExpenses, onSave, onDelete, onApply, currentMonthKey }) {
   const [showForm, setShowForm]   = useState(false);
   const [form, setForm]           = useState(emptyForm);
-  const [editing, setEditing]     = useState(null); // id being edited
+  const [editing, setEditing]     = useState(null);
   const [applied, setApplied]     = useState(false);
 
-  const total = fixedExpenses.reduce((s, e) => s + Number(e.amount), 0);
+  // Net impact: income categories ADD, everything else SUBTRACTS
+  const total = fixedExpenses.reduce((s, e) => {
+    const isIncome = INCOME_CATEGORIES.includes(e.category);
+    return isIncome ? s + Number(e.amount) : s - Number(e.amount);
+  }, 0);
 
   const handleSubmit = () => {
     if (!form.description.trim() || !form.amount || isNaN(Number(form.amount))) return;
@@ -66,7 +73,12 @@ export default function FixedExpenses({ fixedExpenses, onSave, onDelete, onApply
           <span className="fe-icon-wrap">🗓</span>
           <div>
             <h2 className="fe-title">Gastos Fijos</h2>
-            <p className="fe-sub">{fixedExpenses.length} concepto{fixedExpenses.length !== 1 ? 's' : ''} · {fmt(total)}/mes</p>
+            <p className="fe-sub">
+              {fixedExpenses.length} concepto{fixedExpenses.length !== 1 ? 's' : ''} · {' '}
+              <span style={{ color: total >= 0 ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)' }}>
+                {total >= 0 ? '+' : ''}{fmt(total)}/mes
+              </span>
+            </p>
           </div>
         </div>
         <div className="fe-header-actions">
@@ -143,20 +155,29 @@ export default function FixedExpenses({ fixedExpenses, onSave, onDelete, onApply
         </div>
       ) : (
         <div className="fe-list">
-          {fixedExpenses.map(exp => (
-            <div key={exp.id} className="fe-item">
-              <div className="fe-item-icon">{CATEGORY_EMOJI[exp.category] || '📌'}</div>
-              <div className="fe-item-info">
-                <span className="fe-item-desc">{exp.description}</span>
-                <span className="fe-item-meta">{exp.category} · Día {exp.day}</span>
+          {fixedExpenses.map(exp => {
+            const isIncome = INCOME_CATEGORIES.includes(exp.category);
+            return (
+              <div key={exp.id} className="fe-item">
+                <div className="fe-item-icon">{CATEGORY_EMOJI[exp.category] || '📌'}</div>
+                <div className="fe-item-info">
+                  <span className="fe-item-desc">{exp.description}</span>
+                  <span className="fe-item-meta">{exp.category} · Día {exp.day}</span>
+                </div>
+                {/* Show + for income categories, - for expenses */}
+                <span
+                  className="fe-item-amount"
+                  style={{ color: isIncome ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)' }}
+                >
+                  {isIncome ? '+' : '-'}{fmt(exp.amount)}
+                </span>
+                <div className="fe-item-actions">
+                  <button className="fe-edit-btn" onClick={() => startEdit(exp)}>✏️</button>
+                  <button className="fe-del-btn" onClick={() => onDelete(exp.id)}>🗑</button>
+                </div>
               </div>
-              <span className="fe-item-amount">-{fmt(exp.amount)}</span>
-              <div className="fe-item-actions">
-                <button className="fe-edit-btn" onClick={() => startEdit(exp)}>✏️</button>
-                <button className="fe-del-btn" onClick={() => onDelete(exp.id)}>🗑</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
