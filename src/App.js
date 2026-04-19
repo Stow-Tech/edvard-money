@@ -191,7 +191,56 @@ export default function App() {
   const allTimeBal = allTimeIng - allTimeEg;
 
   const goToMonth = (y, m) => { setYear(y); setMonth(m); setView('mes'); setFilter('todo'); };
+const exportToExcel = () => {
+  const XLSX = require('xlsx');
+  
+  const wb = XLSX.utils.book_new();
 
+  // Hoja 1: Todas las transacciones
+  const txRows = [];
+  txRows.push(['Mes', 'Fecha', 'Descripción', 'Categoría', 'Tipo', 'Monto']);
+  Object.keys(allTx).sort().forEach(key => {
+    const [y, m] = key.split('-');
+    const mesLabel = `${MONTHS_ES[parseInt(m) - 1]} ${y}`;
+    (allTx[key] || []).forEach(tx => {
+      txRows.push([
+        mesLabel,
+        tx.date,
+        tx.description,
+        tx.category || '',
+        tx.type === 'ingreso' ? 'Ingreso' : 'Egreso',
+        tx.type === 'ingreso' ? tx.amount : -tx.amount,
+      ]);
+    });
+  });
+  const wsTx = XLSX.utils.aoa_to_sheet(txRows);
+  XLSX.utils.book_append_sheet(wb, wsTx, 'Transacciones');
+
+  // Hoja 2: Resumen por mes
+  const resRows = [];
+  resRows.push(['Mes', 'Ingresos', 'Egresos', 'Balance']);
+  historicalMonths.forEach(m => {
+    resRows.push([
+      `${MONTHS_ES[m.month]} ${m.year}`,
+      m.ing,
+      m.eg,
+      m.bal,
+    ]);
+  });
+  const wsRes = XLSX.utils.aoa_to_sheet(resRows);
+  XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen por mes');
+
+  // Hoja 3: Gastos fijos
+  const fijosRows = [];
+  fijosRows.push(['Descripción', 'Categoría', 'Día del mes', 'Monto']);
+  fixedExpenses.forEach(e => {
+    fijosRows.push([e.description, e.category, e.day, e.amount]);
+  });
+  const wsFijos = XLSX.utils.aoa_to_sheet(fijosRows);
+  XLSX.utils.book_append_sheet(wb, wsFijos, 'Gastos Fijos');
+
+  XLSX.writeFile(wb, `EdvardMoney_${new Date().toISOString().slice(0,10)}.xlsx`);
+};
   if (authLoading) return (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg-page)'}}>
       <p style={{color:'var(--text-muted)',fontSize:'0.9rem'}}>Cargando...</p>
@@ -239,7 +288,8 @@ export default function App() {
           <div className="user-row">
             <span className="user-email">{user.email}</span>
             {saving && <span className="saving-badge">guardando...</span>}
-            <button className="logout-btn" onClick={() => signOut(auth)}>Salir</button>
+            <button className="logout-btn" onClick={exportToExcel}>📥 Exportar a Excel</button>
+<button className="logout-btn" onClick={() => signOut(auth)}>Salir</button>
           </div>
         </div>
       </div>
