@@ -114,18 +114,30 @@ export default function App() {
     setShowForm(false);
   };
 
-  const deleteTx = (id) => {
-    setAllTx(prev => ({
-      ...prev,
-      [monthKey]: (prev[monthKey] || []).filter(t => t.id !== id)
-    }));
-  };
+  const [adminPassword] = useState('edvard2024');
 
-  const clearAll = () => {
-    if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
-      setAllTx(prev => ({ ...prev, [monthKey]: [] }));
-    }
-  };
+const deleteTx = (id) => {
+  const pwd = window.prompt('Ingresa la contraseña para eliminar:');
+  if (pwd !== adminPassword) {
+    if (pwd !== null) alert('Contraseña incorrecta.');
+    return;
+  }
+  setAllTx(prev => ({
+    ...prev,
+    [monthKey]: (prev[monthKey] || []).filter(t => t.id !== id)
+  }));
+};
+
+const clearAll = () => {
+  const pwd = window.prompt('Ingresa la contraseña para limpiar todo:');
+  if (pwd !== adminPassword) {
+    if (pwd !== null) alert('Contraseña incorrecta.');
+    return;
+  }
+  if (window.confirm('¿Borrar todos los movimientos de este mes?')) {
+    setAllTx(prev => ({ ...prev, [monthKey]: [] }));
+  }
+};
 
   const saveFixedExpenses  = (list) => setFixedExpenses(list);
   const deleteFixedExpense = (id)  => setFixedExpenses(prev => prev.filter(e => e.id !== id));
