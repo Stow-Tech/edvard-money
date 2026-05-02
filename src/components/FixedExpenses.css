@@ -1,0 +1,251 @@
+.fe-container {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border: 2px solid var(--purple);
+  overflow: hidden;
+}
+
+/* HEADER */
+.fe-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.fe-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.fe-icon-wrap {
+  width: 48px;
+  height: 48px;
+  background: var(--purple-bg);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.fe-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fe-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.fe-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fe-apply-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: var(--purple-bg);
+  color: var(--purple);
+  border: 1.5px solid var(--purple);
+  transition: all 0.15s;
+}
+
+.fe-apply-btn:hover {
+  background: var(--purple);
+  color: white;
+}
+
+.fe-apply-done {
+  background: var(--green-bg) !important;
+  color: var(--green) !important;
+  border-color: var(--green) !important;
+}
+
+.fe-add-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: var(--purple);
+  color: white;
+  transition: opacity 0.15s;
+}
+
+.fe-add-btn:hover { opacity: 0.85; }
+
+/* FORM */
+.fe-form {
+  padding: 0 22px 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.fe-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fe-field-wide {
+  grid-column: span 2;
+}
+
+.fe-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.fe-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.fe-input:focus {
+  border-color: var(--purple);
+}
+
+.fe-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.fe-cancel-btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+}
+
+.fe-save-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--purple);
+  color: white;
+}
+
+.fe-save-btn:hover { opacity: 0.85; }
+
+/* EMPTY */
+.fe-empty {
+  padding: 28px 22px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.fe-empty-sub {
+  font-size: 0.78rem;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+/* LIST */
+.fe-list {
+  border-top: 1px solid var(--border);
+}
+
+.fe-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.fe-item:last-child { border-bottom: none; }
+.fe-item:hover { background: var(--bg-input); }
+
+.fe-item-icon {
+  font-size: 1.3rem;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.fe-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.fe-item-desc {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fe-item-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.fe-item-amount {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--red);
+  flex-shrink: 0;
+}
+
+.fe-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.fe-edit-btn,
+.fe-del-btn {
+  background: none;
+  font-size: 1rem;
+  padding: 4px 6px;
+  opacity: 0.45;
+  border-radius: 6px;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.fe-edit-btn:hover { opacity: 1; background: var(--purple-bg); }
+.fe-del-btn:hover  { opacity: 1; background: var(--red-bg); }
+
+@media (max-width: 540px) {
+  .fe-form-grid { grid-template-columns: 1fr; }
+  .fe-field-wide { grid-column: span 1; }
+  .fe-header { flex-direction: column; align-items: flex-start; }
+}
