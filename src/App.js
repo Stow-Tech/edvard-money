@@ -106,15 +106,20 @@ export default function App() {
   });
 
   const addTx = (tx) => {
-    setAllTx(prev => ({
-      ...prev,
-      [monthKey]: [{ ...tx, id: Date.now() }, ...(prev[monthKey] || [])]
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-    }));
-    setShowForm(false);
-  };
+  const pwd = window.prompt('Ingresa la contraseña para agregar:');
+  if (pwd !== adminPassword) {
+    if (pwd !== null) alert('Contraseña incorrecta.');
+    return;
+  }
+  setAllTx(prev => ({
+    ...prev,
+    [monthKey]: [{ ...tx, id: Date.now() }, ...(prev[monthKey] || [])]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+  }));
+  setShowForm(false);
+};
 
-  const [adminPassword] = useState('edvard2024');
+  const [adminPassword] = useState('steinrich');
 
 const deleteTx = (id) => {
   const pwd = window.prompt('Ingresa la contraseña para eliminar:');
